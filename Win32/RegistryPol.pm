@@ -57,7 +57,7 @@ sub new
 	my $class = shift;
 	my $self->{'options'} = shift ;
 
-	Carp::croak("Win32::RegistryPol::new - invalid or missing options.") if ( !$self->{'options'}->{'inputfile'} && $self->{'options'}->{'scope'} )  ;
+	Carp::croak("Win32::RegistryPol::new - invalid or missing options.") if ( !$self->{'options'}->{'inputfile'} && !$self->{'options'}->{'scope'} )  ;
 	Carp::croak("Win32::RegistryPol::new - invalid scope option.") if ( $self->{'options'}->{'scope'} && $self->{'options'}->{'scope'} !~ m/(user|machine)/i ) ;
 	bless $self, $class;
 	return $self;
@@ -77,18 +77,29 @@ sub load
 	
 	if ( defined($self->{'options'}->{'scope'}) )
 	{
-		my @files = ( $ENV{'windir'} . DIRECTORY_SEPARATOR .  "Sysnative" . DIRECTORY_SEPARATOR . "GroupPolicy" . DIRECTORY_SEPARATOR . $self->{'options'}->{'scope'} . DIRECTORY_SEPARATOR . "Registry.pol",
-					  $ENV{'windir'} . DIRECTORY_SEPARATOR .  "System32" . DIRECTORY_SEPARATOR . "GroupPolicy" . DIRECTORY_SEPARATOR . $self->{'options'}->{'scope'} . DIRECTORY_SEPARATOR . "Registry.pol"
-					) ;
-		foreach ( @files ) 
-		{
-			$self->{'options'}->{'inputfile'} = $_ if ( -f $_ ) ; ;
-		}
+		$self->{'options'}->{'inputfile'} = $ENV{'windir'} . DIRECTORY_SEPARATOR .  "System32" . DIRECTORY_SEPARATOR . "GroupPolicy" . DIRECTORY_SEPARATOR . $self->{'options'}->{'scope'} . DIRECTORY_SEPARATOR . "Registry.pol"  ;					
+		$self->{'options'}->{'inputfile'} = $ENV{'windir'} . DIRECTORY_SEPARATOR .  "Sysnative" . DIRECTORY_SEPARATOR . "GroupPolicy" . DIRECTORY_SEPARATOR . $self->{'options'}->{'scope'} . DIRECTORY_SEPARATOR . "Registry.pol" if ( -d $ENV{'windir'} . DIRECTORY_SEPARATOR .  "Sysnative" . DIRECTORY_SEPARATOR . "GroupPolicy" . DIRECTORY_SEPARATOR . $self->{'options'}->{'scope'}  ) ;
 	}
 	$self->__loadfile() if ( -f $self->{'options'}->{'inputfile'} ) ;
 	$self->__initfile() if ( !-f $self->{'options'}->{'inputfile'} ) ;
 	return ( $self->{'poldata'} ) ;
 }
+
+# +----------------------------------------------------------------------+
+# | Function: checkKey
+# +----------------------------------------------------------------------+
+# | Description:Check key data
+# +----------------------------------------------------------------------+ 
+sub checkKey
+{
+	my $self = shift ;
+	my ( $key, $name ) = @_ ;
+	my ($p) = grep { $_->{lc($name)} } @{$self->{'poldata'}->{lc($key)}};
+	return 1 if ( defined($p->{$name}) ) ;
+	return 0;
+
+}
+
 
 # +----------------------------------------------------------------------+
 # | Function: getData
@@ -99,7 +110,7 @@ sub getData
 {
 	my $self = shift ;
 	my ( $key, $name ) = @_ ;
-	my ($p) = grep { $_->{$name} } @{$self->{'poldata'}->{$key}};
+	my ($p) = grep { $_->{lc($name)} } @{$self->{'poldata'}->{lc($key)}};
 	return unless ( defined($p->{$name}) ) ;
 	return ( (split(/[A-Z_]+\:(.*)/, $p->{$name}))[1] ) ;
 }
@@ -170,7 +181,7 @@ sub setKey
 	
 	my $newKey = "5b00" . $dKey . "3b00" . $dName . "3b00" . __int322hexle($type) . "3b00" . $dSize . "3b00" . $dValue ;
 	
-	
+	$self->deleteKey($key, $name) ; # delete old key if exists
 	my %finaldata = ( $name => $RegTypes{$type} . ":" . $value ,
 					'size' => length($dValue)/2,
 					"body" => $newKey					) ;
@@ -208,6 +219,7 @@ sub store
 	$self->{'options'}->{'outpufile'} = $self->{'options'}->{'inputfile'} if ( !$outpufile && !defined($self->{'options'}->{'outpufile'}) ) ;
 	$self->{'options'}->{'outpufile'} = $outpufile if ( defined($outpufile) ) ;
 	
+	
 	my @body = () ;
 	foreach my $key ( keys %{$self->{'poldata'}} )
 	{
@@ -219,7 +231,7 @@ sub store
 	
 	my $body = join('5d00',@body) . "5d00" ;
 	my $raw_data = pack('H8 H8 H*', $self->{'__init'}->{'sig'},$self->{'__init'}->{'ver'},$body);
-	write_file($self->{'options'}->{'outpufile'},  $raw_data) or die ("Unable to write policy file");
+	write_file($self->{'options'}->{'outpufile'},  $raw_data);
 	
 }
 
@@ -280,7 +292,7 @@ sub __loadfile
 		next unless ( $key ) ;
 		
 		if($type == 1 || $type == 2) { # REG_SZ || REG_EXPAND_SZ
-			$data = __hex2utf16le($data);
+			$data = __hex2utf16le(__stripTerminalNull($data));
 		}
 
 		if($type == 3) { # REG_BINARY
@@ -301,11 +313,11 @@ sub __loadfile
 			$data = __hex2int64le($data);
 		}
 
-		%finaldata = ( $value => $RegTypes{$type} . ":" . $data ,
+		%finaldata = ( lc($value) => $RegTypes{$type} . ":" . $data ,
 						'size' => $size,
 						'body' => $bodyItem		) ;
 		
-		push @{$self->{'poldata'}->{$key}}, \%finaldata ;
+		push @{$self->{'poldata'}->{lc($key)}}, \%finaldata ;
 		
 	}
 
