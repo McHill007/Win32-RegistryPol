@@ -184,7 +184,7 @@ sub setKey
 	$self->deleteKey($key, $name) ; # delete old key if exists
 	my %finaldata = ( $name => $RegTypes{$type} . ":" . $value ,
 					'size' => length($dValue)/2,
-					"body" => $newKey					) ;
+					'body' => $newKey					) ;
 	
 	push @{$self->{'poldata'}->{$key}}, \%finaldata ;
 }
@@ -202,8 +202,18 @@ sub deleteKey
 	my ( $key, $name ) = @_ ;
 	
 	Carp::croak("Win32::RegistryPol::setKey - Key information missing.") if ( !$key ) ;
-	undef($self->{'poldata'}->{$key}) if ( defined ( $self->{'poldata'}->{$key} ) && !$name ) ;
-	@{$self->{'poldata'}->{$key}} = grep { !$_->{$name} } @{$self->{'poldata'}->{$key}} if ( $name ) ;
+	if ( !$name )
+	{
+		foreach ( grep { $_ =~ m/^\Q$key\E$/i } keys %{$self->{'poldata'}} )
+		{	
+			undef $self->{'poldata'}->{$_};	
+		}
+	}
+	else
+	{
+		@{$self->{'poldata'}->{$key}} = grep { $_->{'name'} !~ m/^\Q$name\E$/i } @{$self->{'poldata'}->{$key}} if ( $name ) ;	
+	}
+
 }
 
 # +----------------------------------------------------------------------+
@@ -342,11 +352,13 @@ sub __loadfile
 			$data = __hex2int64le($data);
 		}
 
-		%finaldata = ( lc($value) => $RegTypes{$type} . ":" . $data ,
+		%finaldata = ( $value => $RegTypes{$type} . ":" . $data ,
 						'size' => __hex2int32le($dataset->{'size'}),
-						'body' => $rawdata		) ;
+						'body' => $rawdata,
+						'name' => lc($value),
+						'key' => lc($key)		) ;
 		
-		push @{$self->{'poldata'}->{lc($key)}}, \%finaldata ;
+		push @{$self->{'poldata'}->{$key}}, \%finaldata ;
 		
 
 		
