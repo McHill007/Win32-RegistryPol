@@ -184,7 +184,9 @@ sub setKey
 	$self->deleteKey($key, $name) ; # delete old key if exists
 	my %finaldata = ( $name => $RegTypes{$type} . ":" . $value ,
 					'size' => length($dValue)/2,
-					'body' => $newKey					) ;
+					'body' => $newKey,
+					'name' => lc($name),
+					'key' => lc($key)					) ;
 	
 	push @{$self->{'poldata'}->{$key}}, \%finaldata ;
 }
@@ -211,7 +213,7 @@ sub deleteKey
 	}
 	else
 	{
-		@{$self->{'poldata'}->{$key}} = grep { $_->{'name'} !~ m/^\Q$name\E$/i } @{$self->{'poldata'}->{$key}} if ( $name ) ;	
+		@{$self->{'poldata'}->{$key}} = grep { $_->{'name'} !~ m/^\Q$name\E$/i } @{$self->{'poldata'}->{$key}} ;	
 	}
 
 }
