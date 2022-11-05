@@ -179,7 +179,7 @@ sub setKey
 		$dValue = __int642hexle($value);
 	}	
 	
-	my $newKey = "5b00" . $dKey . "3b00" . $dName . "3b00" . __int322hexle($type) . "3b00" . $dSize . "3b00" . $dValue ;
+	my $newKey = "5b00" . $dKey . "3b00" . $dName . "3b00" . __int322hexle($type) . "3b00" . $dSize . "3b00" . $dValue . "5d00" ;
 	
 	$self->deleteKey($key, $name) ; # delete old key if exists
 	my %finaldata = ( $name => $RegTypes{$type} . ":" . $value ,
@@ -219,17 +219,14 @@ sub store
 	$self->{'options'}->{'outpufile'} = $self->{'options'}->{'inputfile'} if ( !$outpufile && !defined($self->{'options'}->{'outpufile'}) ) ;
 	$self->{'options'}->{'outpufile'} = $outpufile if ( defined($outpufile) ) ;
 	
-	
-	my @body = () ;
+	my $body  ;
 	foreach my $key ( keys %{$self->{'poldata'}} )
 	{
-		foreach my $data ( @{$self->{'poldata'}->{$key}} )
+		foreach ( @{$self->{'poldata'}->{$key}} )
 		{
-			push @body, $data->{'body'} ;
+			$body .= $_->{'body'};
 		}
 	}
-	
-	my $body = join('5d00',@body) . "5d00" ;
 	my $raw_data = pack('H8 H8 H*', $self->{'__init'}->{'sig'},$self->{'__init'}->{'ver'},$body);
 	write_file($self->{'options'}->{'outpufile'},  $raw_data);
 	
@@ -274,22 +271,54 @@ sub __loadfile
 	$self->{'__init'}->{'sig'} = $sig ;	
 	$self->{'__init'}->{'ver'} = $ver ;
 	
-	
-	my @body = split /5d00/, $body;
-	
-		
-	foreach my $bodyItem ( @body )
-	{
-		$bodyItem =~ m/5b00(?<key>.*?)3b00(?<value>.*?)3b00(?<type>.*?)3b00(?<size>.*?)3b00(?<data>.*)/i ; 
+	my @body = unpack("(A4)*", $body);
 
-		my $key  	= __hex2utf16le(__stripTerminalNull($+{'key'})) ;
-		my $value 	= __hex2utf16le(__stripTerminalNull($+{'value'})) ;
-		my $type 	= __hex2int32le($+{'type'}) ;
-		my $size	= __hex2int32le($+{'size'}) ;
-		my $data	= $+{'data'} ;
+	my $index = 0 ;
+
+	while(scalar(@body) !=0)
+	{
+
+		
+		my $rawdata ;
+
+		my $dataset = {} ;
+		
+		$body[0] eq "5b00" or die "bad body" ;
+		shift @body ;
+		
+		$rawdata = "5b00";
+	
+		my ( $key, $value, $type, $size, $data ) ;
+		
+		
+		foreach ( ("key","value","type","size") )
+		{
+			while( my $bodyItem = shift(@body) )
+			{
+				#get key
+				last if ( $bodyItem eq "3b00" ) ;
+				$dataset->{$_} .= $bodyItem;
+				$rawdata .= $bodyItem;
+			}
+			$rawdata .= "3b00";
+		}
+		
+		$size	= __hex2int32le($dataset->{'size'}) / 2 ;
+
+		$data = join('',@body[0..$size-1]);
+		$rawdata .= $data;
+		@body = @body[ $size .. $#body ];
+		
+		$body[0] eq "5d00" or die "bad body" ;
+		$rawdata .= "5d00";
+		shift @body ;
+
+
+		$key  	= __hex2utf16le(__stripTerminalNull($dataset->{'key'})) ;
+		$value 	= __hex2utf16le(__stripTerminalNull($dataset->{'value'})) ;
+		$type 	= __hex2int32le($dataset->{'type'}) ;
 		my %finaldata ;
 		
-		next unless ( $key ) ;
 		
 		if($type == 1 || $type == 2) { # REG_SZ || REG_EXPAND_SZ
 			$data = __hex2utf16le(__stripTerminalNull($data));
@@ -314,10 +343,12 @@ sub __loadfile
 		}
 
 		%finaldata = ( lc($value) => $RegTypes{$type} . ":" . $data ,
-						'size' => $size,
-						'body' => $bodyItem		) ;
+						'size' => __hex2int32le($dataset->{'size'}),
+						'body' => $rawdata		) ;
 		
 		push @{$self->{'poldata'}->{lc($key)}}, \%finaldata ;
+		
+
 		
 	}
 
