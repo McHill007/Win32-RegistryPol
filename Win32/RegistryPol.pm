@@ -141,8 +141,8 @@ sub setKey
 	my ( $key, $name, $value, $type ) = @_ ;
 	Carp::croak("Win32::RegistryPol::setKey - Key information missing.") if ( !$key ) ;
 	Carp::croak("Win32::RegistryPol::setKey - Unknown Type.") if ( defined($type) && $type !~ m/(0|1|2|4|5|11)/ ) ;
-	Carp::croak("Win32::RegistryPol::setKey - Invlid Key.") if ( $key =~ m/\[|\]/; ) ;
-	Carp::croak("Win32::RegistryPol::setKey - Invlid Name.") if ( $name =~ m/\[|\]/; ) ;
+	Carp::croak("Win32::RegistryPol::setKey - Invlid Key.") if ( $key =~ m/(\[|\])/ ) ;
+	Carp::croak("Win32::RegistryPol::setKey - Invlid Name.") if ( $name =~ m/(\[|\])/ ) ;
 	
 	
 
