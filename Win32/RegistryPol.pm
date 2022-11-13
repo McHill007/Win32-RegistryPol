@@ -111,8 +111,9 @@ sub getData
 	my $self = shift ;
 	my ( $key, $name ) = @_ ;
 	my ($p) = grep { $_->{lc($name)} } @{$self->{'poldata'}->{lc($key)}};
-	return unless ( defined($p->{$name}) ) ;
-	return ( (split(/[A-Z_]+\:(.*)/, $p->{$name}))[1] ) ;
+	return unless ( defined($p->{lc($name)}) ) ;
+
+	return ( (split(/[A-Z_]+\:(.*)/, $p->{lc($name)}))[1] ) ;
 }
 
 
@@ -356,13 +357,13 @@ sub __loadfile
 			$data = __hex2int64le($data);
 		}
 
-		%finaldata = ( $value => $RegTypes{$type} . ":" . $data ,
+		%finaldata = ( lc($value) => $RegTypes{$type} . ":" . $data ,
 						'size' => __hex2int32le($dataset->{'size'}),
 						'body' => $rawdata,
 						'name' => lc($value),
 						'key' => lc($key)		) ;
 		
-		push @{$self->{'poldata'}->{$key}}, \%finaldata ;
+		push @{$self->{'poldata'}->{lc($key)}}, \%finaldata ;
 		
 
 		
