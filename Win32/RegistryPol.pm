@@ -286,7 +286,10 @@ sub __loadfile
 	$self->{'__init'}->{'sig'} = $sig ;	
 	$self->{'__init'}->{'ver'} = $ver ;
 	
-	my @body = unpack("(A4)*", $body);
+	my @body = unpack("(A2)*", $body);
+	#my @body = unpack("a2" x (length($body)/2), $body);
+
+
 
 	my $index = 0 ;
 
@@ -298,7 +301,9 @@ sub __loadfile
 
 		my $dataset = {} ;
 		
-		$body[0] eq "5b00" or die "bad body" ;
+		
+		$body[0].$body[1] eq "5b00" or die "bad body start" ;
+		shift @body ;
 		shift @body ;
 		
 		$rawdata = "5b00";
@@ -311,23 +316,33 @@ sub __loadfile
 			while( my $bodyItem = shift(@body) )
 			{
 				#get key
-				last if ( $bodyItem eq "3b00" ) ;
+				if ( $bodyItem eq "3b" ) 
+				{
+					shift @body ;
+					last ;
+				}
 				$dataset->{$_} .= $bodyItem;
 				$rawdata .= $bodyItem;
 			}
 			$rawdata .= "3b00";
 		}
 		
-		$size	= __hex2int32le($dataset->{'size'}) / 2 ;
+		$size	= __hex2int32le($dataset->{'size'}) ;
 
+			
 		$data = join('',@body[0..$size-1]);
 		$rawdata .= $data;
 		@body = @body[ $size .. $#body ];
-		
-		$body[0] eq "5d00" or die "bad body" ;
+	
+
+		$body[0].$body[1] eq "5d00" or die "bad body end" ;
+		#$body[0] eq "5d00" or die Dumper($self->{'poldata'}) ;
 		$rawdata .= "5d00";
 		shift @body ;
+		shift @body ;
 
+
+		
 
 		$key  	= __hex2utf16le(__stripTerminalNull($dataset->{'key'})) ;
 		$value 	= __hex2utf16le(__stripTerminalNull($dataset->{'value'})) ;
